@@ -15,10 +15,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
 from torch.nn.init import xavier_uniform_, constant_, uniform_, normal_
-
 from util.misc import inverse_sigmoid
 from models.ops.modules import MSDeformAttn
-
 
 class DeformableTransformer(nn.Module):
     def __init__(self, d_model=256, nhead=8,
@@ -52,7 +50,6 @@ class DeformableTransformer(nn.Module):
             self.pos_trans_norm = nn.LayerNorm(d_model * 2)
         else:
             self.reference_points = nn.Linear(d_model, 2)
-
         self._reset_parameters()
 
     def _reset_parameters(self):

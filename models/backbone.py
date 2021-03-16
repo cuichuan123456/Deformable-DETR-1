@@ -6,23 +6,18 @@
 # Modified from DETR (https://github.com/facebookresearch/detr)
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
-
 """
 Backbone modules.
 """
 from collections import OrderedDict
-
 import torch
 import torch.nn.functional as F
 import torchvision
 from torch import nn
 from torchvision.models._utils import IntermediateLayerGetter
 from typing import Dict, List
-
 from util.misc import NestedTensor, is_main_process
-
 from .position_encoding import build_position_encoding
-
 
 class FrozenBatchNorm2d(torch.nn.Module):
     """
@@ -32,7 +27,6 @@ class FrozenBatchNorm2d(torch.nn.Module):
     without which any other models than torchvision.models.resnet[18,34,50,101]
     produce nans.
     """
-
     def __init__(self, n, eps=1e-5):
         super(FrozenBatchNorm2d, self).__init__()
         self.register_buffer("weight", torch.ones(n))
@@ -63,7 +57,6 @@ class FrozenBatchNorm2d(torch.nn.Module):
         bias = b - rm * scale
         return x * scale + bias
 
-
 class BackboneBase(nn.Module):
 
     def __init__(self, backbone: nn.Module, train_backbone: bool, return_interm_layers: bool):
@@ -92,7 +85,6 @@ class BackboneBase(nn.Module):
             out[name] = NestedTensor(x, mask)
         return out
 
-
 class Backbone(BackboneBase):
     """ResNet backbone with frozen BatchNorm."""
     def __init__(self, name: str,
@@ -107,7 +99,6 @@ class Backbone(BackboneBase):
         super().__init__(backbone, train_backbone, return_interm_layers)
         if dilation:
             self.strides[-1] = self.strides[-1] // 2
-
 
 class Joiner(nn.Sequential):
     def __init__(self, backbone, position_embedding):

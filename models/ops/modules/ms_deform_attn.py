@@ -24,7 +24,7 @@ from ..functions import MSDeformAttnFunction
 def _is_power_of_2(n):
     if (not isinstance(n, int)) or (n < 0):
         raise ValueError("invalid input for _is_power_of_2: {} (type: {})".format(n, type(n)))
-    return (n & (n-1) == 0) and n != 0
+    return (n & (n - 1) == 0) and n != 0
 
 
 class MSDeformAttn(nn.Module):
@@ -42,16 +42,18 @@ class MSDeformAttn(nn.Module):
         _d_per_head = d_model // n_heads
         # you'd better set _d_per_head to a power of 2 which is more efficient in our CUDA implementation
         if not _is_power_of_2(_d_per_head):
-            warnings.warn("You'd better set d_model in MSDeformAttn to make the dimension of each attention head a power of 2 "
-                          "which is more efficient in our CUDA implementation.")
-
+            warnings.warn(
+                "You'd better set d_model in MSDeformAttn to make the dimension of each attention head a power of 2 "
+                "which is more efficient in our CUDA implementation.")
+        # 使用cuda实现。
         self.im2col_step = 64
 
         self.d_model = d_model
         self.n_levels = n_levels
         self.n_heads = n_heads
         self.n_points = n_points
-
+        # 采样点的坐标偏移，每个query在每个注意力头和每个特征层都需要采样n_points个
+        # 并且每个x,y坐标都有对应的偏移量。所以要乘以2
         self.sampling_offsets = nn.Linear(d_model, n_heads * n_levels * n_points * 2)
         self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points)
         self.value_proj = nn.Linear(d_model, d_model)
@@ -63,7 +65,10 @@ class MSDeformAttn(nn.Module):
         constant_(self.sampling_offsets.weight.data, 0.)
         thetas = torch.arange(self.n_heads, dtype=torch.float32) * (2.0 * math.pi / self.n_heads)
         grid_init = torch.stack([thetas.cos(), thetas.sin()], -1)
-        grid_init = (grid_init / grid_init.abs().max(-1, keepdim=True)[0]).view(self.n_heads, 1, 1, 2).repeat(1, self.n_levels, self.n_points, 1)
+        grid_init = (grid_init / grid_init.abs().max(-1, keepdim=True)[0]).view(self.n_heads, 1, 1, 2).repeat(1,
+                                                                                                              self.n_levels,
+                                                                                                              self.n_points,
+                                                                                                              1)
         for i in range(self.n_points):
             grid_init[:, :, i, :] *= i + 1
         with torch.no_grad():
@@ -75,7 +80,8 @@ class MSDeformAttn(nn.Module):
         xavier_uniform_(self.output_proj.weight.data)
         constant_(self.output_proj.bias.data, 0.)
 
-    def forward(self, query, reference_points, input_flatten, input_spatial_shapes, input_level_start_index, input_padding_mask=None):
+    def forward(self, query, reference_points, input_flatten, input_spatial_shapes, input_level_start_index,
+                input_padding_mask=None):
         """
         :param query                       (N, Length_{query}, C)
         :param reference_points            (N, Length_{query}, n_levels, 2), range in [0, 1], top-left (0,0), bottom-right (1, 1), including padding area
@@ -87,29 +93,58 @@ class MSDeformAttn(nn.Module):
 
         :return output                     (N, Length_{query}, C)
         """
+        # （1）将输入的input_flatten(对于Encoder就是由backbone输出的特征变换而来，对于Decoder就是Encoder输出的memory)
+        # 通过变化矩阵得到value，同时将padding的部分用0填充；
+        # （2）将query(对于Encoder 就是特征图本身加上position&scale-level embedding;
+        # 对于Decoder就是self-attention的输出加上position embedding的结果，
+        # 2-stage时这position embedding的输出是由Encoder预测的top-k proposal boxes 进行position embedding得来；
+        # 而1-stage时是由预设的query embedding经过全连接层得到，两种情况最终都经过sigmoid函数归一化。
+        # 而对于Encoder来说，就是各特征点子啊所有特征层对应的归一化中心坐标）坐标和预测的坐标偏移得到采样点坐标。
+        # 采样点坐标在value中插值采样出对应的特征的向量，然后施加注意力权重，最后将这个结果经过全连接层输出。
         N, Len_q, _ = query.shape
         N, Len_in, _ = input_flatten.shape
+        # 这个值需要是所有特征点的数量
         assert (input_spatial_shapes[:, 0] * input_spatial_shapes[:, 1]).sum() == Len_in
 
         value = self.value_proj(input_flatten)
         if input_padding_mask is not None:
+            # 将原图的padding的部分用0填充
             value = value.masked_fill(input_padding_mask[..., None], float(0))
+        # (N,Len_in,8,64)拆分成8个头部对应的维度
         value = value.view(N, Len_in, self.n_heads, self.d_model // self.n_heads)
+        # 以下主要是计算出采样点的位置。2 - stage模式下，输入到Decoder的参考点是Encoder预测的top - k
+        # proposal boxes，也就是说是4d的(非2 - stage情况下是2d)，于是需要分情况处理
+        # (N,len_q,8,4,4,2)预测采样点的坐标偏移
         sampling_offsets = self.sampling_offsets(query).view(N, Len_q, self.n_heads, self.n_levels, self.n_points, 2)
+        # (N,Len_q,8,4*4)预测采样点的注意力权重
         attention_weights = self.attention_weights(query).view(N, Len_q, self.n_heads, self.n_levels * self.n_points)
+        # (N，Len_q,8,4,4) 每个query在每个注意力头部内，每个特征层都采样4个特征点，即16（4*4）个采样点，这16个对应的权重进行归一化。
         attention_weights = F.softmax(attention_weights, -1).view(N, Len_q, self.n_heads, self.n_levels, self.n_points)
-        # N, Len_q, n_heads, n_levels, n_points, 2
+
+        # 计算采样点的坐标（以下参考点的坐标已归一化）
+        # sampling_locations: N, Len_q, n_heads, n_levels, n_points, 2
         if reference_points.shape[-1] == 2:
+            # （4，2）其中，每个是（w,h）
             offset_normalizer = torch.stack([input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1)
+            # (N,Len_q,1,n_level=4,1,2)+(N,Len_q,8,n_level=4,4,2)/(1,1,1,n_levels=4,1,2)
+            # 对坐标偏移量使用对应层特征图的宽高进行归一化然后加在参考点坐标上得到采样点坐标
             sampling_locations = reference_points[:, :, None, :, None, :] \
                                  + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
         elif reference_points.shape[-1] == 4:
+            # reference_points最后一维中的前两个是中心坐标xy，后两个是宽高wh
+            # 由于初始化时，offset在-k~K(k=n_points)范围，因此这里除以n_points相当于归一化到0~1
+            # 然后乘以宽和高的一半，加上参考点的中心坐标怕，这样就使片以后的采样点位于 proposal bbox内。
+            # 相对于采样范围进行了约束，减小了搜索空间
             sampling_locations = reference_points[:, :, None, :, None, :2] \
                                  + sampling_offsets / self.n_points * reference_points[:, :, None, :, None, 2:] * 0.5
         else:
             raise ValueError(
                 'Last dim of reference_points must be 2 or 4, but get {} instead.'.format(reference_points.shape[-1]))
+        # 计算结果，根据采样点位置拿出对应的value，并施加预测出来的注意力权重（value 进行weight sum）
+        # (N,Len_in,256)
+        # 调用实质是CUDA实现，需要编译。
         output = MSDeformAttnFunction.apply(
-            value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights, self.im2col_step)
+            value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights,
+            self.im2col_step)
         output = self.output_proj(output)
         return output
