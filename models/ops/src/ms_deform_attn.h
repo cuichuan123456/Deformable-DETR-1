@@ -16,7 +16,6 @@
 #include "cuda/ms_deform_attn_cuda.h"
 #endif
 
-
 at::Tensor
 ms_deform_attn_forward(
     const at::Tensor &value, 

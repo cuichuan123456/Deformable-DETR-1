@@ -5,19 +5,16 @@
 # ------------------------------------------------------------------------------------------------
 # Modified from https://github.com/chengdazhi/Deformable-Convolution-V2-PyTorch/tree/pytorch_1.0.0
 # ------------------------------------------------------------------------------------------------
-
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
 import warnings
 import math
-
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.nn.init import xavier_uniform_, constant_
-
 from ..functions import MSDeformAttnFunction
 
 
@@ -56,17 +53,16 @@ class MSDeformAttn(nn.Module):
         # 并且每个x,y坐标都有对应的偏移量。所以要乘以2
         self.sampling_offsets = nn.Linear(d_model, n_heads * n_levels * n_points * 2)
         self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points)
+        # 经过线性变换得到value。
         self.value_proj = nn.Linear(d_model, d_model)
         self.output_proj = nn.Linear(d_model, d_model)
-
         self._reset_parameters()
 
     def _reset_parameters(self):
         constant_(self.sampling_offsets.weight.data, 0.)
         thetas = torch.arange(self.n_heads, dtype=torch.float32) * (2.0 * math.pi / self.n_heads)
         grid_init = torch.stack([thetas.cos(), thetas.sin()], -1)
-        grid_init = (grid_init / grid_init.abs().max(-1, keepdim=True)[0]).view(self.n_heads, 1, 1, 2).repeat(1,
-                                                                                                              self.n_levels,
+        grid_init = (grid_init / grid_init.abs().max(-1, keepdim=True)[0]).view(self.n_heads, 1, 1, 2).repeat(1, self.n_levels,
                                                                                                               self.n_points,
                                                                                                               1)
         for i in range(self.n_points):
@@ -106,6 +102,7 @@ class MSDeformAttn(nn.Module):
         # 这个值需要是所有特征点的数量
         assert (input_spatial_shapes[:, 0] * input_spatial_shapes[:, 1]).sum() == Len_in
 
+        # (N,Len_in,d_model=256)
         value = self.value_proj(input_flatten)
         if input_padding_mask is not None:
             # 将原图的padding的部分用0填充

@@ -6,12 +6,9 @@
 # Modified from DETR (https://github.com/facebookresearch/detr)
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
-
 import torch.utils.data
 from .torchvision_datasets import CocoDetection
-
 from .coco import build as build_coco
-
 
 def get_coco_api_from_dataset(dataset):
     for _ in range(10):
@@ -21,7 +18,6 @@ def get_coco_api_from_dataset(dataset):
             dataset = dataset.dataset
     if isinstance(dataset, CocoDetection):
         return dataset.coco
-
 
 def build_dataset(image_set, args):
     if args.dataset_file == 'coco':

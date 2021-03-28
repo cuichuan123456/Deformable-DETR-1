@@ -35,9 +35,7 @@ def get_args_parser():
     parser.add_argument('--epochs', default=50, type=int)
     parser.add_argument('--lr_drop', default=40, type=int)
     parser.add_argument('--lr_drop_epochs', default=None, type=int, nargs='+')
-    parser.add_argument('--clip_max_norm', default=0.1, type=float,
-                        help='gradient clipping max norm')
-
+    parser.add_argument('--clip_max_norm', default=0.1, type=float, help='gradient clipping max norm')
     parser.add_argument('--sgd', action='store_true')
 
     # Variants of Deformable DETR
@@ -45,8 +43,7 @@ def get_args_parser():
     parser.add_argument('--two_stage', default=False, action='store_true')
 
     # Model parameters
-    parser.add_argument('--frozen_weights', type=str, default=None,
-                        help="Path to the pretrained model. If set, only the mask head will be trained")
+    parser.add_argument('--frozen_weights', type=str, default=None,  help="Path to the pretrained model. If set, only the mask head will be trained")
 
     # * Backbone
     parser.add_argument('--backbone', default='resnet50', type=str,
@@ -113,12 +110,10 @@ def get_args_parser():
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--resume', default='', help='resume from checkpoint')
-    parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
-                        help='start epoch')
+    parser.add_argument('--start_epoch', default=0, type=int, metavar='N', help='start epoch')
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--num_workers', default=2, type=int)
     parser.add_argument('--cache_mode', default=False, action='store_true', help='whether to cache images on memory')
-
     return parser
 
 
@@ -129,7 +124,6 @@ def main(args):
     if args.frozen_weights is not None:
         assert args.masks, "Frozen training is meant for segmentation only"
     print(args)
-
     device = torch.device(args.device)
 
     # fix the seed for reproducibility

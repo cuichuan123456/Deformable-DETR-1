@@ -24,7 +24,6 @@ shapes = torch.as_tensor([(6, 4), (3, 2)], dtype=torch.long).cuda()
 level_start_index = torch.cat((shapes.new_zeros((1, )), shapes.prod(1).cumsum(0)[:-1]))
 S = sum([(H*W).item() for H, W in shapes])
 
-
 torch.manual_seed(3)
 
 

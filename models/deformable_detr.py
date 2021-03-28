@@ -16,17 +16,13 @@ from torch import nn
 import math
 
 from util import box_ops
-from util.misc import (NestedTensor, nested_tensor_from_tensor_list,
-                       accuracy, get_world_size, interpolate,
-                       is_dist_avail_and_initialized, inverse_sigmoid)
+from util.misc import (NestedTensor, nested_tensor_from_tensor_list,  accuracy, get_world_size, interpolate, is_dist_avail_and_initialized, inverse_sigmoid)
 
 from .backbone import build_backbone
 from .matcher import build_matcher
-from .segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,
-                           dice_loss, sigmoid_focal_loss)
+from .segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,dice_loss, sigmoid_focal_loss)
 from .deformable_transformer import build_deforamble_transformer
 import copy
-
 
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
@@ -128,6 +124,8 @@ class DeformableDETR(nn.Module):
         """
         if not isinstance(samples, NestedTensor):
             samples = nested_tensor_from_tensor_list(samples)
+
+            #需要改变。。
         features, pos = self.backbone(samples)
 
         srcs = []
@@ -154,8 +152,10 @@ class DeformableDETR(nn.Module):
         query_embeds = None
         if not self.two_stage:
             query_embeds = self.query_embed.weight
-        hs, init_reference, inter_references, enc_outputs_class, enc_outputs_coord_unact = self.transformer(srcs, masks, pos, query_embeds)
+        hs, init_reference, inter_references, enc_outputs_class, enc_outputs_coord_unact = \
+            self.transformer(srcs, masks, pos, query_embeds)
 
+##############################################33
         outputs_classes = []
         outputs_coords = []
         for lvl in range(hs.shape[0]):
@@ -450,16 +450,10 @@ def build(args):
     backbone = build_backbone(args)
 
     transformer = build_deforamble_transformer(args)
-    model = DeformableDETR(
-        backbone,
-        transformer,
-        num_classes=num_classes,
-        num_queries=args.num_queries,
-        num_feature_levels=args.num_feature_levels,
-        aux_loss=args.aux_loss,
-        with_box_refine=args.with_box_refine,
-        two_stage=args.two_stage,
-    )
+    model = DeformableDETR(backbone, transformer, num_classes=num_classes, num_queries=args.num_queries,
+                           num_feature_levels=args.num_feature_levels, aux_loss=args.aux_loss,
+                           with_box_refine=args.with_box_refine,  two_stage=args.two_stage, )
+
     if args.masks:
         model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
     matcher = build_matcher(args)

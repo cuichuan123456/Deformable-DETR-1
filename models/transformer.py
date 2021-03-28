@@ -1,12 +1,3 @@
-# ------------------------------------------------------------------------
-# Deformable DETR
-# Copyright (c) 2020 SenseTime. All Rights Reserved.
-# Licensed under the Apache License, Version 2.0 [see LICENSE for details]
-# ------------------------------------------------------------------------
-# Modified from DETR (https://github.com/facebookresearch/detr)
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-# ------------------------------------------------------------------------
-
 import copy
 from typing import Optional, List
 import math
@@ -18,18 +9,18 @@ from torch.nn.init import xavier_uniform_, constant_, uniform_, normal_
 from util.misc import inverse_sigmoid
 from models.ops.modules import MSDeformAttn
 
-class DeformableTransformer(nn.Module):
+class Transformer(nn.Module):
     def __init__(self, d_model=256, nhead=8, num_encoder_layers=6,
                  num_decoder_layers=6, dim_feedforward=1024, dropout=0.1,
                  activation="relu", return_intermediate_dec=False,
                  num_feature_levels=4, dec_n_points=4,  enc_n_points=4,
-                 two_stage=False, two_stage_num_proposals=300):
+                 two_stage=False):
         super().__init__()
 
         self.d_model = d_model
         self.nhead = nhead
         self.two_stage = two_stage
-        self.two_stage_num_proposals = two_stage_num_proposals
+        self.two_stage_num_proposals = 300
 
         encoder_layer = DeformableTransformerEncoderLayer(d_model, dim_feedforward,  dropout, activation,  num_feature_levels, nhead, enc_n_points)
         self.encoder = DeformableTransformerEncoder(encoder_layer, num_encoder_layers)
@@ -117,7 +108,7 @@ class DeformableTransformer(nn.Module):
         return valid_ratio
 
     def forward(self, srcs, masks, pos_embeds, query_embed=None):
-        assert self.two_stage or query_embed is not None
+      #  assert self.two_stage or query_embed is not None 改
 
         # prepare input for encoder
         src_flatten = []
@@ -175,8 +166,8 @@ class DeformableTransformer(nn.Module):
         inter_references_out = inter_references
         if self.two_stage:
             return hs, init_reference_out, inter_references_out, enc_outputs_class, enc_outputs_coord_unact
-        return hs, init_reference_out, inter_references_out, None, None
-
+        #return hs, init_reference_out, inter_references_out, None, None
+        return hs.transpose(1, 2)   #, memory.permute(1, 2, 0).view(bs, c, h, w), weights
 
 class DeformableTransformerEncoderLayer(nn.Module):
     def __init__(self, d_model=256, d_ffn=1024, dropout=0.1, activation="relu", n_levels=4, n_heads=8, n_points=4):
@@ -361,20 +352,43 @@ def _get_activation_fn(activation):
     raise RuntimeError(F"activation should be relu/gelu, not {activation}.")
 
 
-def build_deforamble_transformer(args):
-    return DeformableTransformer(
-        d_model=args.hidden_dim, #256
-        nhead=args.nheads, #8
-        num_encoder_layers=args.enc_layers,#6
-        num_decoder_layers=args.dec_layers, #6
-        dim_feedforward=args.dim_feedforward, #1024
-        dropout=args.dropout, #0.1
+# def build_deforamble_transformer(args):
+#     return Transformer(
+#         d_model=args.hidden_dim, #256
+#         nhead=args.nheads, #8
+#         num_encoder_layers=args.enc_layers,#6
+#         num_decoder_layers=args.dec_layers, #6
+#         dim_feedforward=args.dim_feedforward, #1024
+#         dropout=args.dropout, #0.1
+#         activation="relu",
+#         return_intermediate_dec=True,
+#         num_feature_levels=args.num_feature_levels, #4
+#         dec_n_points=args.dec_n_points, #4
+#         enc_n_points=args.enc_n_points,#4
+#         two_stage=args.two_stage, #false
+#         two_stage_num_proposals=args.num_queries ) #300
+
+
+def build_transformer(hidden_dim,
+                      dropout,
+                      nheads,
+                      dim_feedforward, #128
+                      enc_layers,  #6
+                      dec_layers,
+                      pre_norm=False,
+                      return_intermediate_dec=False):
+
+    return Transformer(
+        d_model=hidden_dim,  # 256
+        nhead=nheads,  # 8
+        num_encoder_layers=enc_layers,  # 6
+        num_decoder_layers=dec_layers,  # 6
+        dim_feedforward=dim_feedforward,  # 1024
+        dropout=dropout,  # 0.1
         activation="relu",
         return_intermediate_dec=True,
-        num_feature_levels=args.num_feature_levels, #4
-        dec_n_points=args.dec_n_points, #4
-        enc_n_points=args.enc_n_points,#4
-        two_stage=args.two_stage, #false
-        two_stage_num_proposals=args.num_queries) #300
-
-
+        num_feature_levels=4,  # 4
+        dec_n_points=4,  # 4
+        enc_n_points=4,  # 4
+        two_stage=False,  # false
+    )

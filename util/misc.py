@@ -363,7 +363,6 @@ class NestedTensor(object):
     def __repr__(self):
         return str(self.tensors)
 
-
 def setup_for_distributed(is_master):
     """
     This function disables printing when not in master process
