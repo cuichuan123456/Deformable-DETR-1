@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 from util.misc import NestedTensor
-
+from util.misc import NestedTensor  #一种对多个tensor的集合的封装，让该集合的tensor同时变换
 
 class PositionEmbeddingSine(nn.Module):
     """
